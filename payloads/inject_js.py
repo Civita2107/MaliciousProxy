@@ -1,5 +1,7 @@
-# Handles the actual modification of data
-# Called by the interceptor.py right before the response is sent back to the user
+'''
+Handles the actual modification of data
+Called by the interceptor.py right before the response is sent back to the user
+'''
 import re
 
 def inject_payload(html_content):
