@@ -21,9 +21,14 @@ class CertManager:
         cert.set_issuer(cert.get_subject())
         cert.set_pubkey(key)
         cert.sign(key, 'sha256')
-        
-        with open(self.ca_cert_path, "wb") as f: f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
-        with open(self.ca_key_path, "wb") as f: f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+
+        with open(self.ca_cert_path, "w") as f: # Use "w" for text, not "wb"
+            cert_pem = crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode('utf-8')
+            f.write(cert_pem)
+
+        with open(self.ca_key_path, "w") as f:
+            key_pem = crypto.dump_privatekey(crypto.FILETYPE_PEM, key).decode('utf-8')
+            f.write(key_pem)
 
     # Generate a certificate for a specific hostname, signed by the CA
     def get_cert(self, hostname):
