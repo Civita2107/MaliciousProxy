@@ -1,0 +1,9 @@
+# Security Artifacts
+ca.crt
+ca.key
+certs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
