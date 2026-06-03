@@ -24,7 +24,7 @@ MaliciousProxy/
 ├── payloads/               # Modular "attacks"
 │   ├── inject_js.py        # Logic to find </body> and inject hooks
 │   ├── ssl_strip.py        # Logic to downgrade HTTPS to HTTP
-│   └── cred_harvester.py   # Target-specific scrapers (e.g., Moodle)
+│   └── cred_harvester.py   # Target-specific scrapers
 ├── static/                 # The "Malicious" client-side code
 │   ├── hook.js             # The JS injected into victim browsers
 │   └── logger.ts           # TypeScript for data processing before exfiltration
@@ -33,4 +33,7 @@ MaliciousProxy/
 │   └── dashboard.html      # UI to view captured tokens/credentials
 ├── tests/                  # Lab validation
 │   └── test_mitm.py        # Unit tests for interception logic
-└── README.md               # Documentation of research & ethics
+└── README.md               # Documentation 
+
+## Disclaimer
+This software framework is developed strictly for educational purposes and authorized penetration testing methodologies. Do not execute this code against environments or networks without explicit, written compliance authorization. The author accepts zero liability for misuse or destructive operations using this application framework.
