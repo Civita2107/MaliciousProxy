@@ -7,3 +7,4 @@ certs/
 # Python
 __pycache__/
 *.py[cod]
+requirements.txt
