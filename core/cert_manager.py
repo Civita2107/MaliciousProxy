@@ -1,5 +1,10 @@
 import os
-from OpenSSL import crypto
+import datetime
+from cryptography import x509
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 class CertManager:
     def __init__(self, ca_cert_path='ca.crt', ca_key_path='ca.key'):
@@ -20,63 +25,120 @@ class CertManager:
             raise FileNotFoundError('CA certificate or key is missing. Run generate_ca() first.')
 
         with open(self.ca_cert_path, 'rb') as cert_file:
-            self.ca_cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_file.read())
+            self.ca_cert = x509.load_pem_x509_certificate(cert_file.read())
 
         with open(self.ca_key_path, 'rb') as key_file:
-            self.ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_file.read())
+            self.ca_key = serialization.load_pem_private_key(key_file.read(), password=None)
 
-    # Generate the Root CA on the victim's device
     def generate_ca(self):
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 2048)
+        """Generates the Root CA with proper extensions for browser trust."""
+        key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
         
-        cert = crypto.X509()
-        cert.set_version(2)
-        cert.set_serial_number(1000)
-        cert.get_subject().CN = "Malicious Proxy Root CA"
-        cert.set_issuer(cert.get_subject())
-        cert.set_pubkey(key)
-        cert.gmtime_adj_notBefore(0)
-        cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
-        cert.sign(key, 'sha256')
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "Malicious Proxy Root CA"),
+        ])
+        
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.now(datetime.timezone.utc)
+        ).not_valid_after(
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+        ).add_extension(
+            x509.BasicConstraints(ca=True, path_length=0), critical=True,
+        ).add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        ).add_extension(
+            x509.ExtendedKeyUsage([
+                ExtendedKeyUsageOID.SERVER_AUTH
+            ]),
+            critical=False,
+        ).add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
+            critical=False,
+        ).add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                self.ca_key.public_key(),
+                ),
+            critical=False,
+        ).sign(key, hashes.SHA256())
 
-        with open(self.ca_cert_path, "w") as f: # Use "w" for text, not "wb"
-            cert_pem = crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode('utf-8').strip()
-            f.write(cert_pem)
+        with open(self.ca_cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
 
-        with open(self.ca_key_path, "w") as f:
-            key_pem = crypto.dump_privatekey(crypto.FILETYPE_PEM, key).decode('utf-8')
-            f.write(key_pem)
+        with open(self.ca_key_path, "wb") as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
 
         self.ca_cert = cert
         self.ca_key = key
 
-    # Generate a certificate for a specific hostname, signed by the CA
     def get_cert(self, hostname):
+        """Generates a site-specific certificate signed by your Root CA."""
         cert_path = os.path.join(self.certs_dir, f"{hostname}.crt")
         key_path = os.path.join(self.certs_dir, f"{hostname}.key")
 
         if os.path.exists(cert_path):
             return cert_path, key_path
 
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 2048)
+        key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
 
-        cert = crypto.X509()
-        cert.set_version(2)
-        cert.get_subject().CN = hostname 
-        cert.set_serial_number(2000)     
-        cert.gmtime_adj_notBefore(0)
-        cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
         self._load_ca_material()
-        cert.set_issuer(self.ca_cert.get_subject())
-        cert.set_pubkey(key)
-
-        cert.sign(self.ca_key, 'sha256')
+        
+        subject = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, hostname),
+        ])
+        
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            self.ca_cert.subject
+        ).public_key(
+            key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.now(datetime.timezone.utc)
+        ).not_valid_after(
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+        ).add_extension(
+            x509.SubjectAlternativeName([x509.DNSName(hostname)]),
+            critical=False,
+        ).sign(self.ca_key, hashes.SHA256())
 
         with open(cert_path, "wb") as f:
-            f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
         with open(key_path, "wb") as f:
-            f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
 
         return cert_path, key_path
