@@ -38,4 +38,5 @@ MaliciousProxy/
 ```
 
 ## Disclaimer
+
 This software framework is developed strictly for educational purposes and authorized penetration testing methodologies. Do not execute this code against environments or networks without explicit, written compliance authorization. The author accepts zero liability for misuse or destructive operations using this application framework.
