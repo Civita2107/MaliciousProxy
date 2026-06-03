@@ -1,0 +1,19 @@
+advanced-proxy-framework/
+├── core/                   # The engine: handling sockets and SSL
+│   ├── sniffer.py          # Packet capture and protocol identification
+│   ├── interceptor.py      # Main proxy logic (Request/Response modification)
+│   └── cert_manager.py     # On-the-fly SSL certificate generation
+├── payloads/               # Modular "attacks"
+│   ├── inject_js.py        # Logic to find </body> and inject hooks
+│   ├── ssl_strip.py        # Logic to downgrade HTTPS to HTTP
+│   └── cred_harvester.py   # Target-specific scrapers (e.g., Moodle)
+├── static/                 # The "Malicious" client-side code
+│   ├── hook.js             # The JS injected into victim browsers
+│   └── logger.ts           # TypeScript for data processing before exfiltration
+├── c2_server/              # Command & Control (The "home base")
+│   ├── app.py              # Flask/FastAPI to receive exfiltrated data
+│   └── dashboard.html      # UI to view captured tokens/credentials
+├── tests/                  # Lab validation
+│   └── test_mitm.py        # Unit tests for interception logic
+├── requirements.txt        # Dependencies (scapy, pyOpenSSL, flask)
+└── README.md               # Documentation of research & ethics
